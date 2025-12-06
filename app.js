@@ -4,6 +4,14 @@ let categories = [];
 let transactions = [];
 let budget = { id: "1", amount: "0" };
 
+// ===== 自訂選項 =====
+const PAYER_OPTIONS = ["Lei", "Amber", "Vic"];
+const PARTICIPANT_OPTIONS = ["Lei", "Amber", "Vic"];
+const TRIP_OPTIONS = [
+  { value: "taichung-2025", label: "台中-2025" },
+];
+
+
 // ===== DOM Elements =====
 const landingSection = document.getElementById("landing-section");
 const loginSection = document.getElementById("login-section");
@@ -17,8 +25,13 @@ const welcomeMsg = document.getElementById("welcome-msg");
 
 const btnAddTransaction = document.getElementById("btn-add-transaction");
 const btnManageCategory = document.getElementById("btn-manage-category");
+const btnSplitBill = document.getElementById("btn-split-bill");
+
+const btnSettleTrip = document.getElementById("btn-settle-trip");
 const transactionList = document.getElementById("transaction-list");
 const transactionListTitle = document.getElementById("transaction-list-title");
+
+
 
 const totalIncome = document.getElementById("total-income");
 const totalExpense = document.getElementById("total-expense");
@@ -210,7 +223,7 @@ function updateSummary() {
   totalIncome.textContent = income.toLocaleString();
   totalExpense.textContent = expense.toLocaleString();
 
-  // Update Budget UI
+    // Update Budget UI
   const budgetAmount = Number(budget.amount);
   const remaining = budgetAmount - expense;
   const percent =
@@ -219,6 +232,7 @@ function updateSummary() {
   budgetRemaining.textContent = `$${remaining.toLocaleString()}`;
   totalBudget.textContent = `$${budgetAmount.toLocaleString()}`;
   budgetPercent.textContent = `${percent}%`;
+
 
   // Progress Bar
   let progressWidth = budgetAmount > 0 ? (remaining / budgetAmount) * 100 : 0;
@@ -278,9 +292,9 @@ async function openBudgetModal() {
   }
 }
 
-// 新增交易彈窗
+
+// 新增交易彈窗（含 payer / participants / trip_id）
 async function openAddTransactionModal() {
-  // 準備類別選項 HTML
   const categoryOptions = categories
     .map((cat) => `<option value="${cat.id}">${cat.name}</option>`)
     .join("");
@@ -290,7 +304,9 @@ async function openAddTransactionModal() {
   const { value: formValues } = await Swal.fire({
     title: "記一筆",
     html: `
-      <form id="swal-txn-form" class="swal-form">
+      <form id="swal-txn-form" class="swal-form" style="text-align:left;">
+        <!-- 前面保留你原本的項目 / 類別 / 金額 / 收支 / 日期 -->
+
         <div class="form-group">
           <label>項目名稱</label>
           <input type="text" id="swal-note" class="swal2-input" placeholder="例如：午餐、搭公車、買卡片" required autofocus>
@@ -316,6 +332,58 @@ async function openAddTransactionModal() {
           <label>日期</label>
           <input type="date" id="swal-date" class="swal2-input" value="${today}" required>
         </div>
+
+        <!-- 🧾 這筆是誰付的（單選 select） -->
+        <div class="form-group">
+          <label>這筆是誰付的？</label>
+          <select id="swal-payer" class="swal2-select">
+            <option value="">請選擇付款人</option>
+            ${PAYER_OPTIONS.map(
+              (name) => `<option value="${name}">${name}</option>`
+            ).join("")}
+          </select>
+        </div>
+
+        <!-- 👥 有誰一起（多選 checkbox） -->
+        <div class="form-group">
+          <label>有誰一起？（可多選）</label>
+            <div id="swal-participants" 
+       style="
+         display:flex;
+         flex-direction:column;
+         align-items:flex-start;
+         gap:8px;
+         padding:6px 0;
+         font-size:15px;
+         text-align:left;
+       ">
+            ${PARTICIPANT_OPTIONS.map(
+              (name) => `
+              <label style="
+        display:inline-flex;
+        align-items:center;
+        gap:6px;
+        font-size:14px;
+        white-space:nowrap;
+      ">
+                <input type="checkbox" name="swal-participant" value="${name}">
+                <span>${name}</span>
+              </label>
+            `
+            ).join("")}
+          </div>
+        </div>
+
+        <!-- 🧳 旅行 ID（單選 select） -->
+        <div class="form-group">
+          <label>旅行 ID</label>
+          <select id="swal-trip-id" class="swal2-select">
+            <option value="">不用指定</option>
+            ${TRIP_OPTIONS.map(
+              (t) => `<option value="${t.value}">${t.label}</option>`
+            ).join("")}
+          </select>
+        </div>
       </form>
     `,
     focusConfirm: false,
@@ -324,29 +392,36 @@ async function openAddTransactionModal() {
     cancelButtonText: "算了",
     confirmButtonColor: "#5abf98",
     preConfirm: () => {
+      const participants = Array.from(
+        document.querySelectorAll('input[name="swal-participant"]:checked')
+      )
+        .map((el) => el.value)
+        .join(",");
+
       return {
         date: document.getElementById("swal-date").value,
         type: document.getElementById("swal-type").value,
         category_id: document.getElementById("swal-category").value,
         amount: document.getElementById("swal-amount").value,
         note: document.getElementById("swal-note").value,
+        payer: document.getElementById("swal-payer").value,
+        participants,
+        trip_id: document.getElementById("swal-trip-id").value,
       };
     },
   });
 
   if (formValues) {
-    if (!formValues.amount)
+    if (!formValues.amount) {
       return Swal.fire("哎呀！", "金額沒填喔！", "warning");
+    }
 
-    // 顯示 loading
     Swal.fire({
       title: "處理中...",
       text: "正在儲存記帳資料",
       allowOutsideClick: false,
       allowEscapeKey: false,
-      didOpen: () => {
-        Swal.showLoading();
-      },
+      didOpen: () => Swal.showLoading(),
     });
 
     try {
@@ -357,6 +432,51 @@ async function openAddTransactionModal() {
     }
   }
 }
+
+// 分帳試算彈窗
+async function openSettleTripModal() {
+  // 先讓使用者選 trip
+  const { value: tripId } = await Swal.fire({
+    title: "選一個旅行來分帳",
+    input: "select",
+    inputOptions: TRIP_OPTIONS.reduce((acc, t) => {
+      acc[t.value] = t.label;
+      return acc;
+    }, {}),
+    inputPlaceholder: "請選擇旅行 ID",
+    showCancelButton: true,
+    confirmButtonText: "開始試算",
+    cancelButtonText: "取消",
+    confirmButtonColor: "#5abf98",
+    inputValidator: (value) => {
+      if (!value) return "先選一個旅行喔～";
+    },
+  });
+
+  if (!tripId) return;
+
+  // 這裡之後放「分帳計算邏輯」
+  // 先取出同一個 trip 的交易
+  const tripTxns = transactions.filter((t) => t.trip_id === tripId);
+
+  if (tripTxns.length === 0) {
+    return Swal.fire("沒有資料", "這個旅行目前沒有記帳紀錄。", "info");
+  }
+
+  // TODO：之後在這裡跑「誰要給誰多少錢」的演算法
+
+  await Swal.fire({
+    title: "分帳試算（開發中）",
+    html: `
+      <p>已找到 <b>${tripTxns.length}</b> 筆「${TRIP_OPTIONS.find(t => t.value === tripId)?.label || tripId}」的紀錄。</p>
+      <p style="margin-top:8px;color:#888;">接下來可以在這裡加上：每個人實付 / 應付 / 差額，以及匯總成「A ➜ B 給多少」的表格。</p>
+    `,
+    icon: "info",
+  });
+}
+
+
+
 
 // 管理類別彈窗
 async function openManageCategoryModal() {
@@ -492,6 +612,149 @@ window.editCategory = async function (id, currentName, currentColor) {
   }
 };
 
+
+
+async function openSplitBillModal() {
+    // 先選旅行
+  const { value: tripId } = await Swal.fire({
+    title: "分帳試算",
+    input: "select",
+    inputOptions: TRIP_OPTIONS.reduce((map, t) => {
+      map[t.value] = t.label;
+      return map;
+    }, {}),
+    inputPlaceholder: "請選擇旅行",
+    showCancelButton: true,
+    confirmButtonText: "計算",
+    cancelButtonText: "取消",
+  });
+
+  if (!tripId) return;
+
+  // 找出這個 trip 的所有紀錄
+  const tripTxns = transactions.filter((t) => t.trip_id === tripId);
+
+  if (tripTxns.length === 0) {
+    return Swal.fire("沒有資料", "這個旅行沒有記帳喔！", "info");
+  }
+
+  // 初始化：實際付款 & 應該分攤
+  const paid = {};
+  const shouldPay = {};
+  PAYER_OPTIONS.forEach((p) => {
+    paid[p] = 0;
+    shouldPay[p] = 0;
+  });
+
+  // 逐筆計算
+  tripTxns.forEach((txn) => {
+    const amount = Number(txn.amount) || 0;
+
+    // 實際付款人
+    if (txn.payer && paid.hasOwnProperty(txn.payer)) {
+      paid[txn.payer] += amount;
+    }
+
+    // 參與者：用逗號分隔，如果沒填就當作大家都有參與
+    let participants = (txn.participants || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    if (participants.length === 0) {
+      participants = [...PAYER_OPTIONS]; // 沒勾的人，就當作大家一起去
+    }
+
+    const share = amount / participants.length;
+
+    participants.forEach((name) => {
+      if (shouldPay.hasOwnProperty(name)) {
+        shouldPay[name] += share;
+      }
+    });
+  });
+
+  // 計算每個人「多付 / 少付」
+  const net = {}; // >0 表示應收，<0 表示應付
+  PAYER_OPTIONS.forEach((p) => {
+    net[p] = paid[p] - shouldPay[p];
+  });
+
+  // 整理成「誰要給誰多少」
+  const creditors = []; // 要收錢的人
+  const debtors = [];   // 要付錢的人
+
+  PAYER_OPTIONS.forEach((p) => {
+    const v = net[p];
+    if (v > 1) {
+      creditors.push({ name: p, amt: v });      // 要收 v
+    } else if (v < -1) {
+      debtors.push({ name: p, amt: -v });       // 要付 -v
+    }
+  });
+
+  const settlements = [];
+  let i = 0;
+  let j = 0;
+
+  while (i < debtors.length && j < creditors.length) {
+    const debtor = debtors[i];
+    const creditor = creditors[j];
+    const pay = Math.min(debtor.amt, creditor.amt);
+
+    settlements.push(
+      `${debtor.name} ➜ ${creditor.name}：${Math.round(pay)} 元`
+    );
+
+    debtor.amt -= pay;
+    creditor.amt -= pay;
+
+    if (debtor.amt <= 1) i++;
+    if (creditor.amt <= 1) j++;
+  }
+
+  // 組畫面文字
+  let html = "<div style='text-align:left; line-height:1.8;'>";
+
+  html += "<h3 style='margin:8px 0 4px;'>📌 每人實際付款</h3><ul>";
+  PAYER_OPTIONS.forEach((p) => {
+    html += `<li><b>${p}</b> 共付出：${Math.round(paid[p])} 元</li>`;
+  });
+  html += "</ul>";
+
+  html += "<h3 style='margin:12px 0 4px;'>📊 每人應分攤</h3><ul>";
+  PAYER_OPTIONS.forEach((p) => {
+    html += `<li><b>${p}</b> 應分攤：${Math.round(shouldPay[p])} 元</li>`;
+  });
+  html += "</ul>";
+
+  html += "<h3 style='margin:12px 0 4px;'>💸 建議結算方式</h3>";
+  if (settlements.length === 0) {
+    html += "<p>大家都剛好，沒有需要互相轉帳 🎉</p>";
+  } else {
+    html += "<ul>";
+    settlements.forEach((line) => {
+      html += `<li>${line}</li>`;
+    });
+    html += "</ul>";
+  }
+
+  html += "</div>";
+
+  Swal.fire({
+    title: "分帳結果",
+    html,
+    confirmButtonText: "OK",
+  });
+}
+
+
+
+
+
+
+
+
 // ===== CRUD Operations =====
 async function createTransaction(payload) {
   await api("/api/transactions", {
@@ -500,10 +763,14 @@ async function createTransaction(payload) {
       ...payload,
       id: `txn-${Date.now()}`,
       amount: Number(payload.amount),
+      payer: payload.payer || "",
+      participants: payload.participants || "",
+      trip_id: payload.trip_id || "",
     }),
   });
   await loadTransactions();
 }
+
 
 // 編輯交易
 window.editTransaction = async function (id) {
@@ -519,28 +786,36 @@ window.editTransaction = async function (id) {
     )
     .join("");
 
+  const participantsArr = (txn.participants || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
   const { value: formValues } = await Swal.fire({
     title: "編輯記帳",
     html: `
-      <form id="swal-txn-form" class="swal-form">
+      <form id="swal-txn-form" class="swal-form" style="text-align:left;">
+        <!-- 前面的名稱 / 類別 / 金額 / 收支 / 日期照舊 -->
+
         <div class="form-group">
           <label>項目名稱</label>
-          <input type="text" id="swal-note" class="swal2-input" placeholder="例如：午餐、搭公車、買卡片" value="${
-            txn.note || ""
-          }" required autofocus>
+          <input type="text" id="swal-note" class="swal2-input"
+                 value="${txn.note || ""}" required autofocus>
         </div>
+
         <div class="form-group">
           <label>類別</label>
           <select id="swal-category" class="swal2-select">
             ${categoryOptions}
           </select>
         </div>
+
         <div class="form-group">
           <label>金額</label>
-          <input type="number" id="swal-amount" class="swal2-input" placeholder="多少錢？" min="1" value="${
-            txn.amount
-          }" required>
+          <input type="number" id="swal-amount" class="swal2-input"
+                 value="${txn.amount}" min="1" required>
         </div>
+
         <div class="form-group">
           <label>收支</label>
           <select id="swal-type" class="swal2-select">
@@ -552,11 +827,62 @@ window.editTransaction = async function (id) {
             }>收入</option>
           </select>
         </div>
+
         <div class="form-group">
           <label>日期</label>
-          <input type="date" id="swal-date" class="swal2-input" value="${
-            txn.date
-          }" required>
+          <input type="date" id="swal-date" class="swal2-input"
+                 value="${txn.date}" required>
+        </div>
+
+        <!-- payer select -->
+        <div class="form-group">
+          <label>這筆是誰付的？</label>
+          <select id="swal-payer" class="swal2-select">
+            <option value="">請選擇付款人</option>
+            ${PAYER_OPTIONS.map(
+              (name) => `
+              <option value="${name}" ${
+                txn.payer === name ? "selected" : ""
+              }>${name}</option>`
+            ).join("")}
+          </select>
+        </div>
+
+        <!-- participants checkbox -->
+        <div class="form-group">
+          <label>有誰一起？（可多選）</label>
+          <div id="swal-participants" style="
+         display:flex;
+         flex-direction:column;
+         align-items:flex-start;
+         gap:8px;
+         padding:6px 0;
+         font-size:15px;
+         text-align:left;
+       ">
+            ${PARTICIPANT_OPTIONS.map(
+              (name) => `
+              <label style="display:flex; align-items:center; gap:6px; font-size:14px;" white-space:nowrap;">
+                <input type="checkbox" name="swal-participant" value="${name}"
+                  ${participantsArr.includes(name) ? "checked" : ""}>
+                <span>${name}</span>
+              </label>`
+            ).join("")}
+          </div>
+        </div>
+
+        <!-- trip select -->
+        <div class="form-group">
+          <label>旅行 ID</label>
+          <select id="swal-trip-id" class="swal2-select">
+            <option value="">不用指定</option>
+            ${TRIP_OPTIONS.map(
+              (t) => `
+              <option value="${t.value}" ${
+                txn.trip_id === t.value ? "selected" : ""
+              }>${t.label}</option>`
+            ).join("")}
+          </select>
         </div>
       </form>
     `,
@@ -566,29 +892,36 @@ window.editTransaction = async function (id) {
     cancelButtonText: "取消",
     confirmButtonColor: "#5abf98",
     preConfirm: () => {
+      const participants = Array.from(
+        document.querySelectorAll('input[name="swal-participant"]:checked')
+      )
+        .map((el) => el.value)
+        .join(",");
+
       return {
         date: document.getElementById("swal-date").value,
         type: document.getElementById("swal-type").value,
         category_id: document.getElementById("swal-category").value,
         amount: document.getElementById("swal-amount").value,
         note: document.getElementById("swal-note").value,
+        payer: document.getElementById("swal-payer").value,
+        participants,
+        trip_id: document.getElementById("swal-trip-id").value,
       };
     },
   });
 
   if (formValues) {
-    if (!formValues.amount)
+    if (!formValues.amount) {
       return Swal.fire("哎呀！", "金額沒填喔！", "warning");
+    }
 
-    // 顯示 loading
     Swal.fire({
       title: "更新中...",
       text: "正在儲存變更",
       allowOutsideClick: false,
       allowEscapeKey: false,
-      didOpen: () => {
-        Swal.showLoading();
-      },
+      didOpen: () => Swal.showLoading(),
     });
 
     try {
@@ -606,6 +939,8 @@ window.editTransaction = async function (id) {
     }
   }
 };
+
+
 
 // 把刪除函式掛載到 window 以便在 innerHTML onclick 中呼叫
 window.deleteTransaction = async function (id) {
@@ -675,6 +1010,13 @@ logoutBtn.addEventListener("click", logout);
 btnAddTransaction.addEventListener("click", openAddTransactionModal);
 btnManageCategory.addEventListener("click", openManageCategoryModal);
 budgetSection.addEventListener("click", openBudgetModal);
+if (btnSettleTrip) {
+  btnSettleTrip.addEventListener("click", openSettleTripModal);
+}
+if (btnSplitBill) {
+  btnSplitBill.addEventListener("click", openSplitBillModal);
+}
+
 
 // ===== Initialize =====
 async function init() {

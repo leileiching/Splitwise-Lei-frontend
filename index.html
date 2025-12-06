@@ -68,7 +68,7 @@
             <!-- 帳戶統計 -->
             <div class="bells-card">
                 <div class="budget-main-display" id="budget-section">
-                    <span class="label-lg">本月還能花</span>
+                    <span class="label-lg">本趟還能花</span>
                     <div class="amount-hero" id="budget-remaining">$0</div>
 
                     <div class="progress-bar-bg">
@@ -82,11 +82,11 @@
 
                 <div class="bell-stats">
                     <div class="stat-item income">
-                        <span class="label">本月收入</span>
+                        <span class="label">額外收入</span>
                         <span id="total-income" class="amount">0</span>
                     </div>
                     <div class="stat-item expense">
-                        <span class="label">本月支出</span>
+                        <span class="label">累計支出</span>
                         <span id="total-expense" class="amount">0</span>
                     </div>
                 </div>
@@ -94,15 +94,23 @@
 
             <!-- 功能按鈕區 -->
             <div class="action-grid">
-                <button id="btn-add-transaction" class="action-card income">
-                    <span class="icon">✏️</span>
-                    <span>記一筆</span>
-                </button>
-                <button id="btn-manage-category" class="action-card expense">
-                    <span class="icon">🗂️</span>
-                    <span>管理分類</span>
-                </button>
-            </div>
+  <button id="btn-add-transaction" class="action-card income">
+    <div class="icon">📝</div>
+    記一筆
+  </button>
+
+  <button id="btn-manage-category" class="action-card expense">
+    <div class="icon">📂</div>
+    管理類別
+  </button>
+
+  <!-- ⭐ 新增：分帳試算（跨兩欄） -->
+  <button id="btn-split-bill" class="action-card split span-2">
+    <div class="icon">🧮</div>
+    分帳試算
+  </button>
+</div>
+
 
             <!-- 交易紀錄 -->
             <div class="list-container">
@@ -111,40 +119,15 @@
                     <!-- 動態載入 -->
                 </div>
             </div>
+
+
+
+
         </section>
 
     </div>
 
-    <!-- 隱藏的 Template 用於 SweetAlert -->
-    <template id="tpl-transaction-form">
-        <form id="swal-txn-form" class="swal-form">
-            <div class="form-group">
-                <label>日期</label>
-                <input type="date" id="swal-date" class="swal2-input" required>
-            </div>
-            <div class="form-group">
-                <label>收支</label>
-                <select id="swal-type" class="swal2-select">
-                    <option value="expense">支出</option>
-                    <option value="income">收入</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label>類別</label>
-                <select id="swal-category" class="swal2-select">
-                    <!-- JS 填入 -->
-                </select>
-            </div>
-            <div class="form-group">
-                <label>金額</label>
-                <input type="number" id="swal-amount" class="swal2-input" placeholder="多少錢？" min="1" required>
-            </div>
-            <div class="form-group">
-                <label>備註</label>
-                <input type="text" id="swal-note" class="swal2-input" placeholder="例如：買卡片、聚餐">
-            </div>
-        </form>
-    </template>
+
 
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="config.js"></script>
